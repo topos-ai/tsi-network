@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Topos Similarity Index - Network</title>
+  <link href='https://fonts.googleapis.com/css?family=Rubik' rel='stylesheet' type='text/css'>
+  <style>
+  canvas { margin:.5em auto;}
+</style>
+</head>
+<body>
+  <canvas width="1200" height="800"></canvas>
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <script>
+    var color = d3.scaleOrdinal(d3.schemeCategory10);
+    var dict = {}, 
+    nodes = [],
+    links = [];
+
+    var inputZip = '10002'
+    loadData(inputZip)
+
+    var canvas = document.querySelector("canvas"),
+    context = canvas.getContext("2d"),
+    width = canvas.width,
+    height = canvas.height;
+
+    var simulation = d3.forceSimulation()
+      .force("link", d3.forceLink(links).distance(100))
+      .force("charge", d3.forceManyBody().distanceMin(120).strength(-2000))
+      .force("center", d3.forceCenter(width / 2, height / 2));
+
+    function loadData (inputZip) {
+      d3.json("https://api.topos.ai/v1/public/region/us-zipcode/"+inputZip+"/similarities", calculateNetwork)
+    }
+
+    function calculateNetwork (error, graph) {
+      context.clearRect(0, 0, width, height);
+      nodes = []
+      links = []
+
+      var queue = d3.queue();
+      
+      var top11 = []
+      top11.push(graph.properties.zipcode)
+      dict[graph.properties.zipcode] = graph.properties
+
+      graph.similarities.forEach(function(d){
+        top11.push(d)
+        links.push({"source":graph.properties.zipcode,"target":d})
+        queue.defer(d3.json, "https://api.topos.ai/v1/public/region/us-zipcode/"+d+"/similarities");
+      })
+
+      queue.awaitAll(function(error, subgraphs) {
+        if (error) throw error;
+
+      subgraphs.forEach(function(d){
+        dict[d.properties.zipcode] = d.properties
+        d.similarities.forEach(function(node){
+
+          if (top11.includes(node) && node!=inputZip) {
+            var x = links.filter(function( obj ) {return obj.source == node && obj.target == d.properties.zipcode;}).length;
+            if (!x) {
+              links.push({"source":d.properties.zipcode,"target":node})
+            }     
+          }
+        })
+      })
+
+        var nodesByName = {};
+        links.forEach(function(link) {
+          link.source = nodeByName(link.source);
+          link.target = nodeByName(link.target);
+        });
+
+        nodes = d3.values(nodesByName);
+
+        function nodeByName(name) {
+          return nodesByName[name] || (nodesByName[name] = {name: name});
+        }
+
+        Array.prototype.move = function(from, to) {
+          this.splice(to, 0, this.splice(from, 1)[0]);
+        };
+
+        nodes.move(nodes.findIndex(x => x.name==inputZip), 0)
+
+        nodes[0].fx = width / 2
+        nodes[0].fy = height / 2
+
+        restart()
+      });
+
+    }
+
+
+    function restart() {
+
+      simulation
+        .nodes(nodes)
+        .on("tick", ticked);
+
+      simulation.force("link")
+        .links(links);
+
+      d3.select(canvas)
+      .on("dblclick", doubleclicked)
+      .call(d3.drag()
+        .container(canvas)
+        .subject(dragsubject)
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended));
+
+      simulation.alpha(1).restart()
+
+    }
+
+    function ticked() {
+      context.clearRect(0, 0, width, height);
+      context.save();
+
+      context.beginPath();
+      links.forEach(drawLink);
+      context.strokeStyle = "rgba(0,0,0,0.2)";
+      context.stroke();
+
+      nodes.forEach(drawNode);
+      nodes.forEach(drawNames);
+      drawTitle();
+
+      context.restore();
+    }
+
+    function doubleclicked () {
+      var p = d3.mouse(this);
+      var closeNode = simulation.find(p[0], p[1], 10);
+      if(closeNode) { 
+        inputZip = closeNode.name;
+        loadData(inputZip); 
+      }
+    }
+
+    function dragsubject() {
+      return simulation.find(d3.event.x, d3.event.y);
+    }
+
+    function dragstarted() {
+      if (!d3.event.active) simulation.alphaTarget(0.1).restart();
+      d3.event.subject.fx = d3.event.subject.x;
+      d3.event.subject.fy = d3.event.subject.y;
+    }
+
+    function dragged() {
+      d3.event.subject.fx = d3.event.x;
+      d3.event.subject.fy = d3.event.y;
+    }
+
+    function dragended() {
+      if (!d3.event.active) simulation.alphaTarget(0);
+      d3.event.subject.fx = null;
+      d3.event.subject.fy = null;
+    }
+
+    function drawLink(d) {
+      context.moveTo(d.source.x, d.source.y);
+      context.lineTo(d.target.x, d.target.y);
+    }
+
+    function drawNames(d) {
+      context.font = "12px Rubik";
+      context.fillStyle = '#000';
+      context.textAlign = "start";
+      context.textBaseline="middle"; 
+      context.fillText(dict[d.name]['name']+', '+dict[d.name]['state'], d.x+8, d.y);
+    }
+
+    function drawNode(d) {
+      context.beginPath();
+      context.fillStyle = color(dict[d.name]['state']);
+      context.moveTo(d.x + 5, d.y);
+      context.arc(d.x, d.y, 5, 0, 2 * Math.PI);
+      context.strokeStyle = "rgba(255,255,255,1)";
+      context.stroke();
+      context.fill();
+      context.closePath();
+    }
+
+    function drawTitle() {
+      context.font = "18px Rubik";
+      context.fillStyle = '#000';
+      context.textAlign = "center";
+      context.textBaseline="middle"; 
+      context.fillText(dict[inputZip]['name']+', '+dict[inputZip]['state']+' ('+inputZip+')',width/2,20);
+    }
+
+  </script>
+  
+</body>
+</html>
