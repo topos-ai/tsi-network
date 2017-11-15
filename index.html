@@ -5,13 +5,34 @@
   <title>Topos Similarity Index - Network</title>
   <link href='https://fonts.googleapis.com/css?family=Rubik' rel='stylesheet' type='text/css'>
   <style>
-  canvas { margin:0 auto; display: block}
+  html, body {padding: 0; margin: 0;}
+  /*canvas { margin:0 auto; display: block; width:100%; height:100%;}*/
 </style>
 </head>
 <body>
-  <canvas width="1200" height="800"></canvas>
+  <canvas></canvas>
   <script src="https://d3js.org/d3.v4.min.js"></script>
   <script>
+
+  var canvas = document.querySelector("canvas"),
+  context = canvas.getContext("2d"),
+      width = canvas.width,
+      height = canvas.height;
+
+  window.addEventListener('resize', resizeCanvas, false);
+
+  function resizeCanvas() {
+          canvas.width = window.innerWidth-10;
+          canvas.height = window.innerHeight-10;
+          width = canvas.width;
+          height = canvas.height;
+
+          drawCanvas(); 
+  }
+  resizeCanvas();
+
+  function drawCanvas() {
+
     var color = d3.scaleOrdinal(d3.schemeCategory10);
     var dict = {}, 
     nodes = [],
@@ -20,14 +41,10 @@
     var inputZip = '10002'
     loadData(inputZip)
 
-    var canvas = document.querySelector("canvas"),
-    context = canvas.getContext("2d"),
-    width = canvas.width,
-    height = canvas.height;
 
     var simulation = d3.forceSimulation()
-      .force("link", d3.forceLink(links).distance(100))
-      .force("charge", d3.forceManyBody().distanceMin(120).strength(-2000))
+      .force("link", d3.forceLink(links).distance(width/10))
+      .force("charge", d3.forceManyBody().distanceMin(width/10).strength(-width*2))
       .force("center", d3.forceCenter(width / 2, height / 2));
 
     function loadData (inputZip) {
@@ -170,9 +187,9 @@
     function drawNames(d) {
       context.font = "12px Rubik";
       context.fillStyle = '#000';
-      context.textAlign = "start";
+      context.textAlign = "center";
       context.textBaseline="middle"; 
-      context.fillText(dict[d.name]['name']+', '+dict[d.name]['state'], d.x+8, d.y);
+      context.fillText(dict[d.name]['name']+', '+dict[d.name]['state'], d.x, d.y+12);
     }
 
     function drawNode(d) {
@@ -193,6 +210,8 @@
       context.textBaseline="middle"; 
       context.fillText(dict[inputZip]['name']+', '+dict[inputZip]['state']+' ('+inputZip+')',width/2,20);
     }
+
+  }
 
   </script>
   
